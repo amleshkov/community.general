@@ -73,6 +73,7 @@ options:
     required: no
     default: no
     type: bool
+    version_added: '0.2.0'
   force:
     description:
     - Continue dump or import even if we get an SQL error.
@@ -80,6 +81,7 @@ options:
     required: no
     type: bool
     default: no
+    version_added: '0.2.0'
   master_data:
     description:
       - Option to dump a master replication server to produce a dump file
@@ -93,18 +95,21 @@ options:
     type: int
     choices: [0, 1, 2]
     default: 0
+    version_added: '0.2.0'
   skip_lock_tables:
     description:
       - Skip locking tables for read. Used when I(state=dump), ignored otherwise.
     required: no
     type: bool
     default: no
+    version_added: '0.2.0'
   dump_extra_args:
     description:
       - Provide additional arguments for mysqldump.
         Used when I(state=dump) only, ignored otherwise.
     required: no
     type: str
+    version_added: '0.2.0'
   use_shell:
     description:
       - Used to prevent C(Broken pipe) errors when the imported I(target) file is compressed.
@@ -113,6 +118,7 @@ options:
     required: no
     type: bool
     default: no
+    version_added: '0.2.0'
   unsafe_login_password:
     description:
       - If C(no), the module will safely use a shell-escaped version of the I(login_password) value.
@@ -120,7 +126,33 @@ options:
       - Used only when I(state) is C(import) or C(dump) and I(login_password) is passed, ignored otherwise.
     type: bool
     default: no
-    version_added: '2.10'
+    version_added: '0.2.0'
+  restrict_config_file:
+    description:
+      - Read only passed I(config_file).
+      - When I(state) is C(dump) or C(import), by default the module passes I(config_file) parameter
+        using C(--defaults-extra-file) command-line argument to C(mysql/mysqldump) utilities
+        under the hood that read named option file in addition to usual option files.
+      - If this behavior is undesirable, use C(yes) to read only named option file.
+    type: bool
+    default: no
+    version_added: '0.2.0'
+  check_implicit_admin:
+    description:
+      - Check if mysql allows login as root/nopassword before trying supplied credentials.
+      - If success, passed I(login_user)/I(login_password) will be ignored.
+    type: bool
+    default: no
+    version_added: '0.2.0'
+  config_overrides_defaults:
+    description:
+      - If C(yes), connection parameters from I(config_file) will override the default
+        values of I(login_host) and I(login_port) parameters.
+      - Used when I(stat) is C(present) or C(absent), ignored otherwise.
+      - It needs Python 3.5+ as the default interpreter on a target host.
+    type: bool
+    default: no
+    version_added: '0.2.0'
 
 seealso:
 - module: mysql_info
@@ -251,6 +283,14 @@ EXAMPLES = r'''
     name: foo
     target: /tmp/dump.sql
     dump_extra_args: --skip-triggers
+
+- name: Try to create database as root/nopassword first. If not allowed, pass the credentials
+  mysql_db:
+    check_implicit_admin: yes
+    login_user: bob
+    login_password: 123456
+    name: bobdata
+    state: present
 '''
 
 RETURN = r'''
@@ -269,6 +309,7 @@ executed_commands:
   returned: if executed
   type: list
   sample: ["CREATE DATABASE acme"]
+  version_added: '0.2.0'
 '''
 
 import os
@@ -309,18 +350,28 @@ def db_dump(module, host, user, password, db_name, target, all_databases, port,
             config_file, socket=None, ssl_cert=None, ssl_key=None, ssl_ca=None,
             single_transaction=None, quick=None, ignore_tables=None, hex_blob=None,
             encoding=None, force=False, master_data=0, skip_lock_tables=False,
-            dump_extra_args=None, unsafe_password=False):
+            dump_extra_args=None, unsafe_password=False, restrict_config_file=False,
+            check_implicit_admin=False):
     cmd = module.get_bin_path('mysqldump', True)
     # If defined, mysqldump demands --defaults-extra-file be the first option
     if config_file:
-        cmd += " --defaults-extra-file=%s" % shlex_quote(config_file)
-    if user is not None:
-        cmd += " --user=%s" % shlex_quote(user)
-    if password is not None:
-        if not unsafe_password:
-            cmd += " --password=%s" % shlex_quote(password)
+        if restrict_config_file:
+            cmd += " --defaults-file=%s" % shlex_quote(config_file)
         else:
-            cmd += " --password=%s" % password
+            cmd += " --defaults-extra-file=%s" % shlex_quote(config_file)
+
+    if check_implicit_admin:
+        cmd += " --user=root --password=''"
+    else:
+        if user is not None:
+            cmd += " --user=%s" % shlex_quote(user)
+
+        if password is not None:
+            if not unsafe_password:
+                cmd += " --password=%s" % shlex_quote(password)
+            else:
+                cmd += " --password=%s" % password
+
     if ssl_cert is not None:
         cmd += " --ssl-cert=%s" % shlex_quote(ssl_cert)
     if ssl_key is not None:
@@ -379,21 +430,31 @@ def db_dump(module, host, user, password, db_name, target, all_databases, port,
 
 def db_import(module, host, user, password, db_name, target, all_databases, port, config_file,
               socket=None, ssl_cert=None, ssl_key=None, ssl_ca=None, encoding=None, force=False,
-              use_shell=False, unsafe_password=False):
+              use_shell=False, unsafe_password=False, restrict_config_file=False,
+              check_implicit_admin=False):
     if not os.path.exists(target):
         return module.fail_json(msg="target %s does not exist on the host" % target)
 
     cmd = [module.get_bin_path('mysql', True)]
     # --defaults-file must go first, or errors out
     if config_file:
-        cmd.append("--defaults-extra-file=%s" % shlex_quote(config_file))
-    if user:
-        cmd.append("--user=%s" % shlex_quote(user))
-    if password:
-        if not unsafe_password:
-            cmd.append("--password=%s" % shlex_quote(password))
+        if restrict_config_file:
+            cmd.append("--defaults-file=%s" % shlex_quote(config_file))
         else:
-            cmd.append("--password=%s" % password)
+            cmd.append("--defaults-extra-file=%s" % shlex_quote(config_file))
+
+    if check_implicit_admin:
+        cmd += " --user=root --password=''"
+    else:
+        if user:
+            cmd.append("--user=%s" % shlex_quote(user))
+
+        if password:
+            if not unsafe_password:
+                cmd.append("--password=%s" % shlex_quote(password))
+            else:
+                cmd.append("--password=%s" % password)
+
     if ssl_cert is not None:
         cmd.append("--ssl-cert=%s" % shlex_quote(ssl_cert))
     if ssl_key is not None:
@@ -509,6 +570,9 @@ def main():
             dump_extra_args=dict(type='str'),
             use_shell=dict(type='bool', default=False),
             unsafe_login_password=dict(type='bool', default=False),
+            restrict_config_file=dict(type='bool', default=False),
+            check_implicit_admin=dict(type='bool', default=False),
+            config_overrides_defaults=dict(type='bool', default=False),
         ),
         supports_check_mode=True,
     )
@@ -550,6 +614,9 @@ def main():
     skip_lock_tables = module.params["skip_lock_tables"]
     dump_extra_args = module.params["dump_extra_args"]
     use_shell = module.params["use_shell"]
+    restrict_config_file = module.params["restrict_config_file"]
+    check_implicit_admin = module.params['check_implicit_admin']
+    config_overrides_defaults = module.params['config_overrides_defaults']
 
     if len(db) > 1 and state == 'import':
         module.fail_json(msg="Multiple databases are not supported with state=import")
@@ -565,8 +632,19 @@ def main():
         if db == ['all']:
             module.fail_json(msg="name is not allowed to equal 'all' unless state equals import, or dump.")
     try:
-        cursor, db_conn = mysql_connect(module, login_user, login_password, config_file, ssl_cert, ssl_key, ssl_ca,
-                                        connect_timeout=connect_timeout)
+        cursor = None
+        if check_implicit_admin:
+            try:
+                cursor, db_conn = mysql_connect(module, 'root', '', config_file, ssl_cert, ssl_key, ssl_ca,
+                                                connect_timeout=connect_timeout,
+                                                config_overrides_defaults=config_overrides_defaults)
+            except Exception as e:
+                check_implicit_admin = False
+                pass
+
+        if not cursor:
+            cursor, db_conn = mysql_connect(module, login_user, login_password, config_file, ssl_cert, ssl_key, ssl_ca,
+                                            connect_timeout=connect_timeout, config_overrides_defaults=config_overrides_defaults)
     except Exception as e:
         if os.path.exists(config_file):
             module.fail_json(msg="unable to connect to database, check login_user and login_password are correct or %s has the credentials. "
@@ -617,7 +695,8 @@ def main():
                                      login_port, config_file, socket, ssl_cert, ssl_key,
                                      ssl_ca, single_transaction, quick, ignore_tables,
                                      hex_blob, encoding, force, master_data, skip_lock_tables,
-                                     dump_extra_args, unsafe_login_password)
+                                     dump_extra_args, unsafe_login_password, restrict_config_file,
+                                     check_implicit_admin)
         if rc != 0:
             module.fail_json(msg="%s" % stderr)
         module.exit_json(changed=True, db=db_name, db_list=db, msg=stdout,
@@ -636,7 +715,8 @@ def main():
                                        all_databases,
                                        login_port, config_file,
                                        socket, ssl_cert, ssl_key, ssl_ca,
-                                       encoding, force, use_shell, unsafe_login_password)
+                                       encoding, force, use_shell, unsafe_login_password,
+                                       restrict_config_file, check_implicit_admin)
         if rc != 0:
             module.fail_json(msg="%s" % stderr)
         module.exit_json(changed=True, db=db_name, db_list=db, msg=stdout,

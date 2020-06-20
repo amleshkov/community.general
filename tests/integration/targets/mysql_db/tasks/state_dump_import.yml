@@ -24,6 +24,10 @@
     dump_file2="{{tmp_dir}}/{{file3}}"
     db_user="test"
     db_user_unsafe_password="pass!word"
+    config_file="/root/.my.cnf"
+
+- name: create custom config file
+  shell: 'echo "[client]" > {{ config_file }}'
 
 - name: create user for test unsafe_login_password parameter
   mysql_user:
@@ -37,12 +41,14 @@
   mysql_db:
     name: '{{ db_name }}'
     state: present
+    check_implicit_admin: yes
     login_unix_socket: '{{ mysql_socket }}'
 
 - name: create database
   mysql_db:
     name: '{{ db_name2 }}'
     state: present
+    check_implicit_admin: no
     login_unix_socket: '{{ mysql_socket }}'
 
 - name: state dump/import - create table department
@@ -81,13 +87,16 @@
     master_data: 1
     skip_lock_tables: yes
     dump_extra_args: --skip-triggers
+    config_file: '{{ config_file }}'
+    restrict_config_file: yes
+    check_implicit_admin: no
   register: result
 
 - name: assert successful completion of dump operation
   assert:
     that:
     - result is changed
-    - result.executed_commands[0] is search("mysqldump --user={{ db_user }} --password=\*\*\*\*\*\*\*\* --force --socket={{ mysql_socket }} {{ db_name }} --skip-lock-tables --quick --ignore-table={{ db_name }}.department --master-data=1 --skip-triggers")
+    - result.executed_commands[0] is search("mysqldump --defaults-file={{ config_file }} --user={{ db_user }} --password=\*\*\*\*\*\*\*\* --force --socket={{ mysql_socket }} {{ db_name }} --skip-lock-tables --quick --ignore-table={{ db_name }}.department --master-data=1 --skip-triggers")
 
 - name: state dump/import - file name should exist
   file: name={{ db_file_name }} state=file
@@ -98,12 +107,14 @@
     state: dump
     target: "{{ dump_file1 }}"
     login_unix_socket: '{{ mysql_socket }}'
+    check_implicit_admin: yes
   register: dump_result1
 
 - name: assert successful completion of dump operation (with multiple databases in comma separated form)
   assert:
     that:
-       - "dump_result1.changed == true"
+       - dump_result1 is changed
+       - dump_result1.executed_commands[0] is search(" --user=root --password=''")
 
 - name: state dump - dump file1 should exist
   file: name={{ dump_file1 }} state=file

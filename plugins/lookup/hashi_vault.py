@@ -22,9 +22,9 @@ DOCUMENTATION = """
     - Retrieve secrets from HashiCorp's vault.
   notes:
     - Due to a current limitation in the HVAC library there won't necessarily be an error if a bad endpoint is specified.
-    - As of Ansible 2.10, only the latest version of a secret is returned when specifying a KV v2 path.
-    - As of Ansible 2.10, all options can be supplied via term string (space delimited key=value pairs) or by parameters (see examples).
-    - As of Ansible 2.10, when C(secret) is the first option in the term string, C(secret=) is not required (see examples).
+    - As of community.general 0.2.0, only the latest version of a secret is returned when specifying a KV v2 path.
+    - As of community.general 0.2.0, all options can be supplied via term string (space delimited key=value pairs) or by parameters (see examples).
+    - As of community.general 0.2.0, when C(secret) is the first option in the term string, C(secret=) is not required (see examples).
   options:
     secret:
       description: query you are making.
@@ -42,12 +42,14 @@ DOCUMENTATION = """
       ini:
         - section: lookup_hashi_vault
           key: token_path
+      version_added: '0.2.0'
     token_file:
       description: If no token is specified, will try to read the token from this file in C(token_path).
       ini:
         - section: lookup_hashi_vault
           key: token_file
       default: '.vault-token'
+      version_added: '0.2.0'
     url:
       description: URL to vault service.
       env:
@@ -55,6 +57,7 @@ DOCUMENTATION = """
       ini:
         - section: lookup_hashi_vault
           key: url
+          version_added: '0.2.0'
       default: 'http://127.0.0.1:8200'
     username:
       description: Authentication user name.
@@ -67,6 +70,7 @@ DOCUMENTATION = """
       ini:
         - section: lookup_hashi_vault
           key: role_id
+          version_added: '0.2.0'
     secret_id:
       description: Secret id for a vault AppRole auth.
       env:
@@ -75,12 +79,13 @@ DOCUMENTATION = """
       description:
         - Authentication method to be used.
         - C(userpass) is added in Ansible 2.8.
-        - C(aws_iam_login) is added in Ansible 2.10.
+        - C(aws_iam_login) is added in community.general 0.2.0.
       env:
         - name: VAULT_AUTH_METHOD
       ini:
         - section: lookup_hashi_vault
           key: auth_method
+          version_added: '0.2.0'
       choices:
         - token
         - userpass
@@ -91,7 +96,7 @@ DOCUMENTATION = """
     return_format:
       description:
         - Controls how multiple key/value pairs in a path are treated on return.
-        - C(dict) returns a single dict containing the key/value pairs (same behavior as before Ansible 2.10).
+        - C(dict) returns a single dict containing the key/value pairs (same behavior as before community.general 0.2.0).
         - C(values) returns a list of all the values only. Use when you don't care about the keys.
         - C(raw) returns the actual API result, which includes metadata and may have the data nested in other keys.
       choices:
@@ -100,6 +105,7 @@ DOCUMENTATION = """
         - raw
       default: dict
       aliases: [ as ]
+      version_added: '0.2.0'
     mount_point:
       description: Vault mount point, only required if you have a custom mount point.
     ca_cert:
@@ -118,6 +124,7 @@ DOCUMENTATION = """
         env:
         - name: AWS_DEFAULT_PROFILE
         - name: AWS_PROFILE
+        version_added: '0.2.0'
     aws_access_key:
         description: The AWS access key to use.
         type: str
@@ -126,6 +133,7 @@ DOCUMENTATION = """
         - name: EC2_ACCESS_KEY
         - name: AWS_ACCESS_KEY
         - name: AWS_ACCESS_KEY_ID
+        version_added: '0.2.0'
     aws_secret_key:
         description: The AWS secret key that corresponds to the access key.
         type: str
@@ -134,6 +142,7 @@ DOCUMENTATION = """
         - name: EC2_SECRET_KEY
         - name: AWS_SECRET_KEY
         - name: AWS_SECRET_ACCESS_KEY
+        version_added: '0.2.0'
     aws_security_token:
         description: The AWS security token if using temporary access and secret keys.
         type: str
@@ -141,12 +150,14 @@ DOCUMENTATION = """
         - name: EC2_SECURITY_TOKEN
         - name: AWS_SESSION_TOKEN
         - name: AWS_SECURITY_TOKEN
+        version_added: '0.2.0'
     region:
         description: The AWS region for which to create the connection.
         type: str
         env:
         - name: EC2_REGION
         - name: AWS_REGION
+        version_added: '0.2.0'
 """
 
 EXAMPLES = """
@@ -187,7 +198,7 @@ EXAMPLES = """
   debug:
     msg: "{{ lookup('community.general.hashi_vault', 'secret=secret/data/hello token=my_vault_token url=http://myvault_url:8200') }}"
 
-# The following examples work in collection releases after Ansible 2.10
+# The following examples work in collection releases after community.general 0.2.0
 
 - name: secret= is not required if secret is first
   debug:
@@ -433,7 +444,7 @@ class LookupModule(LookupBase):
 
         for i, param in enumerate(term.split()):
             try:
-                key, value = param.split('=')
+                key, value = param.split('=', 1)
             except ValueError:
                 if (i == 0):
                     # allow secret to be specified as value only if it's first

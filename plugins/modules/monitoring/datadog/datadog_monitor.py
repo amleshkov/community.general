@@ -29,6 +29,7 @@ options:
           - This value can also be set with the C(DATADOG_HOST) environment variable.
         required: false
         type: str
+        version_added: '0.2.0'
     app_key:
         description:
           - Your Datadog app key.
@@ -65,7 +66,7 @@ options:
           - A message to include with notifications for this monitor.
           - Email notifications can be sent to specific users by using the same '@username' notation as events.
           - Monitor message template variables can be accessed by using double square brackets, i.e '[[' and ']]'.
-          - C(message) alias is deprecated in Ansible 2.10, since it is used internally by Ansible Core Engine.
+          - C(message) alias is deprecated in community.general 0.2.0, since it is used internally by Ansible Core Engine.
         type: str
         aliases: [ 'message' ]
     silenced:
@@ -202,7 +203,9 @@ def main():
             type=dict(required=False, choices=['metric alert', 'service check', 'event alert', 'process alert', 'log alert']),
             name=dict(required=True),
             query=dict(required=False),
-            notification_message=dict(required=False, default=None, aliases=['message'], deprecated_aliases=[dict(name='message', version='2.14')]),
+            notification_message=dict(required=False, default=None, aliases=['message'],
+                                      deprecated_aliases=[dict(name='message', version='3.0.0',
+                                                               collection_name='community.general')]),  # was Ansible 2.14
             silenced=dict(required=False, default=None, type='dict'),
             notify_no_data=dict(required=False, default=False, type='bool'),
             no_data_timeframe=dict(required=False, default=None),

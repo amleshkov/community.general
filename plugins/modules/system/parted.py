@@ -19,7 +19,8 @@ description:
     command line tool. For a full description of the fields and the options
     check the GNU parted manual.
 requirements:
-  - This module requires parted version 1.8.3 and above.
+  - This module requires parted version 1.8.3 and above
+  - align option (except 'undefined') requires parted 2.1 and above
   - If the version of parted is below 3.1, it requires a Linux version running
     the sysfs file system C(/sys/).
 options:
@@ -28,9 +29,9 @@ options:
     type: str
     required: True
   align:
-    description: Set alignment for newly created partitions.
+    description: Set alignment for newly created partitions. Use 'undefined' for parted default aligment.
     type: str
-    choices: [ cylinder, minimal, none, optimal ]
+    choices: [ cylinder, minimal, none, optimal, undefined ]
     default: optimal
   number:
     description:
@@ -48,7 +49,9 @@ options:
     choices: [ s, B, KB, KiB, MB, MiB, GB, GiB, TB, TiB, '%', cyl, chs, compact ]
     default: KiB
   label:
-    description: Creates a new disk label.
+    description:
+     - Disk label type to use.
+     - If C(device) already contains different label, it will be changed to C(label) and any previous partitions will be lost.
     type: str
     choices: [ aix, amiga, bsd, dvh, gpt, loop, mac, msdos, pc98, sun ]
     default: msdos
@@ -94,7 +97,7 @@ options:
     description:
      - If specified and the partition does not exist, will set filesystem type to given partition.
     type: str
-    version_added: '2.10'
+    version_added: '0.2.0'
 notes:
   - When fetching information about a new disk and when the version of parted
     installed on the system is before version 3.1, the module queries the kernel
@@ -487,8 +490,12 @@ def parted(script, device, align):
     """
     global module, parted_exec
 
+    align_option = '-a %s' % align
+    if align == 'undefined':
+        align_option = ''
+
     if script and not module.check_mode:
-        command = "%s -s -m -a %s %s -- %s" % (parted_exec, align, device, script)
+        command = "%s -s -m %s %s -- %s" % (parted_exec, align_option, device, script)
         rc, out, err = module.run_command(command)
 
         if rc != 0:
@@ -540,7 +547,7 @@ def main():
     module = AnsibleModule(
         argument_spec=dict(
             device=dict(type='str', required=True),
-            align=dict(type='str', default='optimal', choices=['cylinder', 'minimal', 'none', 'optimal']),
+            align=dict(type='str', default='optimal', choices=['cylinder', 'minimal', 'none', 'optimal', 'undefined']),
             number=dict(type='int'),
 
             # unit <unit> command

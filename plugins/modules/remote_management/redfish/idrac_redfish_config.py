@@ -60,6 +60,7 @@ options:
       - dictionary of iDRAC attribute name and value pairs to update
     default: {}
     type: 'dict'
+    version_added: '0.2.0'
   timeout:
     description:
       - Timeout in seconds for URL requests to iDRAC controller
@@ -70,6 +71,7 @@ options:
     description:
       - The ID of the System, Manager or Chassis to modify
     type: str
+    version_added: '0.2.0'
 
 author: "Jose Delarosa (@jose-delarosa)"
 '''
@@ -312,7 +314,7 @@ def main():
                              '`manager_attribute_value` are deprecated. '
                              'Use `manager_attributes` instead for passing in '
                              'the manager attribute name and value pairs',
-                             version='2.13')
+                             version='3.0.0', collection_name='community.general')  # was Ansible 2.13
 
     # Return data back or fail with proper message
     if result['ret'] is True:

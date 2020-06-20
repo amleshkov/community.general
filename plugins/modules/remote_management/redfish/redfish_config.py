@@ -60,6 +60,7 @@ options:
       - dictionary of BIOS attributes to update
     default: {}
     type: dict
+    version_added: '0.2.0'
   timeout:
     description:
       - Timeout in seconds for URL requests to OOB controller
@@ -71,27 +72,32 @@ options:
       - list of BootOptionReference strings specifying the BootOrder
     default: []
     type: list
+    version_added: '0.2.0'
   network_protocols:
     required: false
     description:
       -  setting dict of manager services to update
     type: dict
+    version_added: '0.2.0'
   resource_id:
     required: false
     description:
       - The ID of the System, Manager or Chassis to modify
     type: str
+    version_added: '0.2.0'
   nic_addr:
     required: false
     description:
       - EthernetInterface Address string on OOB controller
     default: 'null'
     type: str
+    version_added: '0.2.0'
   nic_config:
     required: false
     description:
       - setting dict of EthernetInterface on OOB controller
     type: dict
+    version_added: '0.2.0'
 
 author: "Jose Delarosa (@jose-delarosa)"
 '''
@@ -261,7 +267,7 @@ def main():
             'bios_attribute_value']
         module.deprecate(msg='The bios_attribute_name/bios_attribute_value '
                          'options are deprecated. Use bios_attributes instead',
-                         version='2.14')
+                         version='3.0.0', collection_name='community.general')  # was Ansible 2.14
 
     # boot order
     boot_order = module.params['boot_order']
