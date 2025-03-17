@@ -7,26 +7,11 @@
 # to the complete work.
 #
 # Copyright (c), Simon Dodsley <simon@purestorage.com>,2017
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without modification,
-# are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#    * Redistributions in binary form must reproduce the above copyright notice,
-#      this list of conditions and the following disclaimer in the documentation
-#      and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
-# USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# Simplified BSD License (see LICENSES/BSD-2-Clause.txt or https://opensource.org/licenses/BSD-2-Clause)
+# SPDX-License-Identifier: BSD-2-Clause
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 HAS_PURESTORAGE = True
 try:
@@ -36,13 +21,15 @@ except ImportError:
 
 HAS_PURITY_FB = True
 try:
-    from purity_fb import PurityFb, FileSystem, FileSystemSnapshot, SnapshotSuffix, rest
+    from purity_fb import PurityFb, FileSystem, FileSystemSnapshot, SnapshotSuffix, rest  # noqa: F401, pylint: disable=unused-import
 except ImportError:
     HAS_PURITY_FB = False
 
-from functools import wraps
+# (TODO: remove next line!)
+from functools import wraps  # noqa: F401, pylint: disable=unused-import
 from os import environ
-from os import path
+# (TODO: remove next line!)
+from os import path  # noqa: F401, pylint: disable=unused-import
 import platform
 
 VERSION = 1.2

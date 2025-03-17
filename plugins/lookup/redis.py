@@ -1,14 +1,16 @@
-# (c) 2012, Jan-Piet Mens <jpmens(at)gmail.com>
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2012, Jan-Piet Mens <jpmens(at)gmail.com>
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    lookup: redis
+    name: redis
     author:
       - Jan-Piet Mens (@jpmens) <jpmens(at)gmail.com>
-      - Ansible Core
+      - Ansible Core Team
     short_description: fetch data from Redis
     description:
       - This lookup returns a list of results from a Redis DB corresponding to a list of items given to it
@@ -17,8 +19,11 @@ DOCUMENTATION = '''
     options:
       _terms:
         description: list of keys to query
+        type: list
+        elements: string
       host:
         description: location of Redis host
+        type: string
         default: '127.0.0.1'
         env:
           - name: ANSIBLE_REDIS_HOST
@@ -46,26 +51,30 @@ DOCUMENTATION = '''
 
 EXAMPLES = """
 - name: query redis for somekey (default or configured settings used)
-  debug: msg="{{ lookup('redis', 'somekey') }}"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.redis', 'somekey') }}"
 
 - name: query redis for list of keys and non-default host and port
-  debug: msg="{{ lookup('redis', item, host='myredis.internal.com', port=2121) }}"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.redis', item, host='myredis.internal.com', port=2121) }}"
   loop: '{{list_of_redis_keys}}'
 
 - name: use list directly
-  debug: msg="{{ lookup('redis', 'key1', 'key2', 'key3') }}"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.redis', 'key1', 'key2', 'key3') }}"
 
 - name: use list directly with a socket
-  debug: msg="{{ lookup('redis', 'key1', 'key2', socket='/var/tmp/redis.sock') }}"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.redis', 'key1', 'key2', socket='/var/tmp/redis.sock') }}"
 
 """
 
 RETURN = """
 _raw:
   description: value(s) stored in Redis
+  type: list
+  elements: str
 """
-
-import os
 
 HAVE_REDIS = False
 try:
@@ -74,7 +83,7 @@ try:
 except ImportError:
     pass
 
-from ansible.module_utils._text import to_text
+from ansible.module_utils.common.text.converters import to_text
 from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
 
@@ -107,5 +116,5 @@ class LookupModule(LookupBase):
                 ret.append(to_text(res))
             except Exception as e:
                 # connection failed or key not found
-                raise AnsibleError('Encountered exception while fetching {0}: {1}'.format(term, e))
+                raise AnsibleError(f'Encountered exception while fetching {term}: {e}')
         return ret

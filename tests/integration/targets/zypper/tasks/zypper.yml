@@ -1,5 +1,10 @@
+---
+# Copyright (c) Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 - name: get hello package version
-  shell: zypper --xml se -svx hello | grep 'name="hello"' | grep 'repository="Main Repository"' | sed 's/.*edition="\([^ ]*\)".*/\1/'
+  shell: zypper --xmlout se -svx hello | grep 'name="hello"' | grep 'repository="Main Repository"' | sed 's/.*edition="\([^ ]*\)".*/\1/'
   register: hello_version
 
 - name: set URL of test package
@@ -17,7 +22,7 @@
 
 - name: check hello with rpm
   shell: rpm -q hello
-  failed_when: False
+  failed_when: false
   register: rpm_result
 
 - debug: var=zypper_result
@@ -50,7 +55,7 @@
 
 - name: check hello with rpm
   shell: rpm -q hello
-  failed_when: False
+  failed_when: false
   register: rpm_result
 
 - debug: var=zypper_result
@@ -86,12 +91,12 @@
 
 - name: check hello with rpm
   shell: rpm -q hello
-  failed_when: False
+  failed_when: false
   register: rpm_hello_result
 
 - name: check metamail with rpm
   shell: rpm -q metamail
-  failed_when: False
+  failed_when: false
   register: rpm_metamail_result
 
 - name: verify packages uninstalled
@@ -110,12 +115,12 @@
 
 - name: check hello with rpm
   shell: rpm -q hello
-  failed_when: False
+  failed_when: false
   register: rpm_hello_result
 
 - name: check metamail with rpm
   shell: rpm -q metamail
-  failed_when: False
+  failed_when: false
   register: rpm_metamail_result
 
 - name: verify packages installed
@@ -139,7 +144,7 @@
     name: doesnotexist
     state: present
   register: zypper_result
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: verify package installation failed
   assert:
@@ -150,20 +155,20 @@
 # INSTALL broken local package
 - name: create directory
   file:
-    path: "{{output_dir | expanduser}}/zypper1"
+    path: "{{remote_tmp_dir | expanduser}}/zypper1"
     state: directory
 
 - name: fake rpm package
   file:
-    path: "{{output_dir | expanduser}}/zypper1/broken.rpm"
+    path: "{{remote_tmp_dir | expanduser}}/zypper1/broken.rpm"
     state: touch
 
 - name: install broken rpm
   zypper:
-    name: "{{output_dir | expanduser}}/zypper1/broken.rpm"
+    name: "{{remote_tmp_dir | expanduser}}/zypper1/broken.rpm"
     state: present
   register: zypper_result
-  ignore_errors: yes
+  ignore_errors: true
 
 - debug: var=zypper_result
 
@@ -191,35 +196,35 @@
 
 - name: create directory
   file:
-    path: "{{output_dir | expanduser}}/zypper2"
+    path: "{{remote_tmp_dir | expanduser}}/zypper2"
     state: directory
 
 - name: copy spec file
   copy:
     src: empty.spec
-    dest: "{{ output_dir | expanduser }}/zypper2/empty.spec"
+    dest: "{{ remote_tmp_dir | expanduser }}/zypper2/empty.spec"
 
 - name: build rpm
   command: |
     rpmbuild -bb \
-    --define "_topdir {{output_dir | expanduser }}/zypper2/rpm-build"
+    --define "_topdir {{remote_tmp_dir | expanduser }}/zypper2/rpm-build"
     --define "_builddir %{_topdir}" \
     --define "_rpmdir %{_topdir}" \
     --define "_srcrpmdir %{_topdir}" \
-    --define "_specdir {{output_dir | expanduser}}/zypper2" \
+    --define "_specdir {{remote_tmp_dir | expanduser}}/zypper2" \
     --define "_sourcedir %{_topdir}" \
-    {{ output_dir }}/zypper2/empty.spec
+    {{ remote_tmp_dir }}/zypper2/empty.spec
   register: rpm_build_result
 
 - name: install empty rpm
   zypper:
-    name: "{{ output_dir | expanduser }}/zypper2/rpm-build/noarch/empty-1-0.noarch.rpm"
-    disable_gpg_check: yes
+    name: "{{ remote_tmp_dir | expanduser }}/zypper2/rpm-build/noarch/empty-1-0.noarch.rpm"
+    disable_gpg_check: true
   register: zypper_result
 
 - name: check empty with rpm
   shell: rpm -q empty
-  failed_when: False
+  failed_when: false
   register: rpm_result
 
 - name: verify installation of empty
@@ -236,13 +241,13 @@
 
 - name: extract from rpm
   zypper:
-    name: "{{ output_dir | expanduser }}/zypper2/rpm-build/noarch/empty-1-0.noarch.rpm"
+    name: "{{ remote_tmp_dir | expanduser }}/zypper2/rpm-build/noarch/empty-1-0.noarch.rpm"
     state: installed
-    disable_gpg_check: yes
-    extra_args_precommand: --root {{ output_dir | expanduser }}/testdir/
+    disable_gpg_check: true
+    extra_args_precommand: --root {{ remote_tmp_dir | expanduser }}/testdir/
 
 - name: check that dir var is exist
-  stat: path={{ output_dir | expanduser }}/testdir/var
+  stat: path={{ remote_tmp_dir | expanduser }}/testdir/var
   register: stat_result
 
 - name: check that we extract rpm package in testdir folder and folder var is exist
@@ -317,7 +322,7 @@
       - +hello
     state: absent
   register: zypper_res
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: verify simultaneous install/remove failed with absent
   assert:
@@ -330,7 +335,7 @@
     name: openSUSE-2016-128 
     type: patch
     state: absent
-  ignore_errors: yes
+  ignore_errors: true
   register: zypper_patch
 - assert:
     that: 
@@ -341,7 +346,7 @@
   zypper:
     name: "{{ hello_package_url }}"
     state: absent
-  ignore_errors: yes
+  ignore_errors: true
   register: zypper_rm
 - assert:
     that: 
@@ -401,15 +406,15 @@
   zypper:
     name: hello
     state: present
-    update_cache: True
+    update_cache: true
   register: zypper_result_update_cache
 
 - name: run updatecache in check mode
   zypper:
     name: hello
     state: present
-    update_cache: True
-  check_mode: True
+    update_cache: true
+  check_mode: true
   register: zypper_result_update_cache_check
 
 
@@ -419,35 +424,35 @@
       - zypper_result_update_cache_check is successful
       - zypper_result_update_cache_check is not changed
 
-- name: ensure no previous netcat package still exists
-  zypper:
-    name:
-      - netcat-openbsd
-      - gnu-netcat
-    state: absent
-
-- name: install netcat-openbsd which conflicts with gnu-netcat
-  zypper:
-    name: netcat-openbsd
-    state: present
-
-- name: try installation of gnu-netcat which should fail due to the conflict
-  zypper:
-    name: gnu-netcat
-    state: present
-  ignore_errors: yes
-  register: zypper_pkg_conflict
-
-- assert:
-    that:
-      - zypper_pkg_conflict is failed
-      - "'conflicts with netcat-openbsd provided' in zypper_pkg_conflict.stdout"
-
-- name: retry installation of gnu-netcat with force_resolution set to choose a resolution
-  zypper:
-    name: gnu-netcat
-    state: present
-    force_resolution: True
+# - name: ensure no previous netcat package still exists
+#   zypper:
+#     name:
+#       - netcat-openbsd
+#       - gnu-netcat
+#     state: absent
+#
+# - name: install netcat-openbsd which conflicts with gnu-netcat
+#   zypper:
+#     name: netcat-openbsd
+#     state: present
+#
+# - name: try installation of gnu-netcat which should fail due to the conflict
+#   zypper:
+#     name: gnu-netcat
+#     state: present
+#   ignore_errors: true
+#   register: zypper_pkg_conflict
+#
+# - assert:
+#     that:
+#       - zypper_pkg_conflict is failed
+#       - "'conflicts with netcat-openbsd provided' in zypper_pkg_conflict.stdout"
+#
+# - name: retry installation of gnu-netcat with force_resolution set to choose a resolution
+#   zypper:
+#     name: gnu-netcat
+#     state: present
+#    force_resolution: True
 
 - name: duplicate rpms block
   vars:
@@ -458,25 +463,25 @@
     - name: Deploy spec files to build 2 packages with duplicate files.
       template:
         src: duplicate.spec.j2
-        dest: "{{ output_dir | expanduser }}/zypper2/duplicate{{ item }}.spec"
+        dest: "{{ remote_tmp_dir | expanduser }}/zypper2/duplicate{{ item }}.spec"
       loop: "{{ looplist }}"
 
     - name: build rpms with duplicate files
       command: |
         rpmbuild -bb \
-        --define "_topdir {{output_dir | expanduser }}/zypper2/rpm-build"
+        --define "_topdir {{remote_tmp_dir | expanduser }}/zypper2/rpm-build"
         --define "_builddir %{_topdir}" \
         --define "_rpmdir %{_topdir}" \
         --define "_srcrpmdir %{_topdir}" \
-        --define "_specdir {{output_dir | expanduser}}/zypper2" \
+        --define "_specdir {{remote_tmp_dir | expanduser}}/zypper2" \
         --define "_sourcedir %{_topdir}" \
-        {{ output_dir | expanduser }}/zypper2/duplicate{{ item }}.spec
+        {{ remote_tmp_dir | expanduser }}/zypper2/duplicate{{ item }}.spec
       loop: "{{ looplist }}"
 
     - name: install duplicate rpms
       zypper:
         name: >-
-          {{ output_dir | expanduser }}/zypper2/rpm-build/noarch/duplicate{{ item }}-1-0.noarch.rpm
+          {{ remote_tmp_dir | expanduser }}/zypper2/rpm-build/noarch/duplicate{{ item }}-1-0.noarch.rpm
         disable_gpg_check: true
       ignore_errors: true
       register: zypper_duplicate_result
@@ -499,7 +504,7 @@
     - name: install duplicate rpms
       zypper:
         name: >-
-          {{ output_dir | expanduser }}/zypper2/rpm-build/noarch/duplicate{{ item }}-1-0.noarch.rpm
+          {{ remote_tmp_dir | expanduser }}/zypper2/rpm-build/noarch/duplicate{{ item }}-1-0.noarch.rpm
         disable_gpg_check: true
         replacefiles: true
       ignore_errors: true

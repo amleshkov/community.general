@@ -1,11 +1,14 @@
-# (c) 2016, Josh Bradley <jbradley(at)digitalocean.com>
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, Josh Bradley <jbradley(at)digitalocean.com>
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    lookup: chef_databag
+    author: Unknown (!UNKNOWN)
+    name: chef_databag
     short_description: fetches data from a Chef Databag
     description:
        - "This is a lookup plugin to provide access to chef data bags using the pychef package.
@@ -14,27 +17,31 @@ DOCUMENTATION = '''
          The lookup order mirrors the one from Chef, all folders in the base path are walked back looking for the following configuration
          file in order : .chef/knife.rb, ~/.chef/knife.rb, /etc/chef/client.rb"
     requirements:
-        - "pychef (python library https://pychef.readthedocs.io `pip install pychef`)"
+        - "pychef (L(Python library, https://pychef.readthedocs.io), C(pip install pychef))"
     options:
         name:
           description:
             - Name of the databag
-          required: True
+          type: string
+          required: true
         item:
           description:
             - Item to fetch
-          required: True
+          type: string
+          required: true
 '''
 
 EXAMPLES = """
-    - debug:
-        msg: "{{ lookup('chef_databag', 'name=data_bag_name item=data_bag_item') }}"
+    - ansible.builtin.debug:
+        msg: "{{ lookup('community.general.chef_databag', 'name=data_bag_name item=data_bag_item') }}"
 """
 
 RETURN = """
   _raw:
     description:
-      - The value from the databag
+      - The value from the databag.
+    type: list
+    elements: dict
 """
 
 from ansible.errors import AnsibleError
@@ -74,11 +81,11 @@ class LookupModule(LookupBase):
                 setattr(self, arg, parsed)
             except ValueError:
                 raise AnsibleError(
-                    "can't parse arg {0}={1} as string".format(arg, arg_raw)
+                    f"can't parse arg {arg}={arg_raw} as string"
                 )
         if args:
             raise AnsibleError(
-                "unrecognized arguments to with_sequence: %r" % args.keys()
+                f"unrecognized arguments to with_sequence: {list(args.keys())!r}"
             )
 
     def run(self, terms, variables=None, **kwargs):

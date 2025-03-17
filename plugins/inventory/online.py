@@ -1,27 +1,27 @@
+# -*- coding: utf-8 -*-
 # Copyright (c) 2018 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import (absolute_import, division, print_function)
+from __future__ import annotations
 
-
-__metaclass__ = type
-
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
     name: online
-    plugin_type: inventory
     author:
-      - Remy Leone (@sieben)
-    short_description: Online inventory source
+      - Remy Leone (@remyleone)
+    short_description: Scaleway (previously Online SAS or Online.net) inventory source
     description:
-        - Get inventory hosts from Online
+        - Get inventory hosts from Scaleway (previously Online SAS or Online.net).
     options:
         plugin:
             description: token that ensures this is a source file for the 'online' plugin.
-            required: True
-            choices: ['online']
+            type: string
+            required: true
+            choices: ['online', 'community.general.online']
         oauth_token:
-            required: True
+            required: true
             description: Online OAuth token.
+            type: string
             env:
                 # in order of precedence
                 - name: ONLINE_TOKEN
@@ -30,6 +30,7 @@ DOCUMENTATION = '''
         hostnames:
             description: List of preference about what to use as an hostname.
             type: list
+            elements: string
             default:
                 - public_ipv4
             choices:
@@ -39,17 +40,18 @@ DOCUMENTATION = '''
         groups:
             description: List of groups.
             type: list
+            elements: string
             choices:
                 - location
                 - offer
                 - rpn
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 # online_inventory.yml file in YAML format
 # Example command line: ansible-inventory --list -i online_inventory.yml
 
-plugin: online
+plugin: community.general.online
 hostnames:
   - public_ipv4
 groups:
@@ -64,9 +66,11 @@ from sys import version as python_version
 from ansible.errors import AnsibleError
 from ansible.module_utils.urls import open_url
 from ansible.plugins.inventory import BaseInventoryPlugin
-from ansible.module_utils._text import to_native, to_text
+from ansible.module_utils.common.text.converters import to_text
 from ansible.module_utils.ansible_release import __version__ as ansible_version
 from ansible.module_utils.six.moves.urllib.parse import urljoin
+
+from ansible_collections.community.general.plugins.plugin_utils.unsafe import make_unsafe
 
 
 class InventoryModule(BaseInventoryPlugin):
@@ -133,7 +137,7 @@ class InventoryModule(BaseInventoryPlugin):
         try:
             response = open_url(url, headers=self.headers)
         except Exception as e:
-            self.display.warning("An error happened while fetching: %s" % url)
+            self.display.warning(f"An error happened while fetching: {url}")
             return None
 
         try:
@@ -168,20 +172,20 @@ class InventoryModule(BaseInventoryPlugin):
             "support"
         )
         for attribute in targeted_attributes:
-            self.inventory.set_variable(hostname, attribute, host_infos[attribute])
+            self.inventory.set_variable(hostname, attribute, make_unsafe(host_infos[attribute]))
 
         if self.extract_public_ipv4(host_infos=host_infos):
-            self.inventory.set_variable(hostname, "public_ipv4", self.extract_public_ipv4(host_infos=host_infos))
-            self.inventory.set_variable(hostname, "ansible_host", self.extract_public_ipv4(host_infos=host_infos))
+            self.inventory.set_variable(hostname, "public_ipv4", make_unsafe(self.extract_public_ipv4(host_infos=host_infos)))
+            self.inventory.set_variable(hostname, "ansible_host", make_unsafe(self.extract_public_ipv4(host_infos=host_infos)))
 
         if self.extract_private_ipv4(host_infos=host_infos):
-            self.inventory.set_variable(hostname, "public_ipv4", self.extract_private_ipv4(host_infos=host_infos))
+            self.inventory.set_variable(hostname, "public_ipv4", make_unsafe(self.extract_private_ipv4(host_infos=host_infos)))
 
         if self.extract_os_name(host_infos=host_infos):
-            self.inventory.set_variable(hostname, "os_name", self.extract_os_name(host_infos=host_infos))
+            self.inventory.set_variable(hostname, "os_name", make_unsafe(self.extract_os_name(host_infos=host_infos)))
 
         if self.extract_os_version(host_infos=host_infos):
-            self.inventory.set_variable(hostname, "os_version", self.extract_os_name(host_infos=host_infos))
+            self.inventory.set_variable(hostname, "os_version", make_unsafe(self.extract_os_name(host_infos=host_infos)))
 
     def _filter_host(self, host_infos, hostname_preferences):
 
@@ -200,6 +204,8 @@ class InventoryModule(BaseInventoryPlugin):
         if not hostname:
             return
 
+        hostname = make_unsafe(hostname)
+
         self.inventory.add_host(host=hostname)
         self._fill_host_variables(hostname=hostname, host_infos=host_infos)
 
@@ -208,6 +214,8 @@ class InventoryModule(BaseInventoryPlugin):
 
             if not group:
                 return
+
+            group = make_unsafe(group)
 
             self.inventory.add_group(group=group)
             self.inventory.add_host(group=group, host=hostname)
@@ -236,8 +244,8 @@ class InventoryModule(BaseInventoryPlugin):
         }
 
         self.headers = {
-            'Authorization': "Bearer %s" % token,
-            'User-Agent': "ansible %s Python %s" % (ansible_version, python_version.split(' ')[0]),
+            'Authorization': f"Bearer {token}",
+            'User-Agent': f"ansible {ansible_version} Python {python_version.split(' ', 1)[0]}",
             'Content-type': 'application/json'
         }
 

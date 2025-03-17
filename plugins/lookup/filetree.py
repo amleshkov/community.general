@@ -1,11 +1,13 @@
-# (c) 2016 Dag Wieers <dag@wieers.com>
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016 Dag Wieers <dag@wieers.com>
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-DOCUMENTATION = '''
-lookup: filetree
+DOCUMENTATION = r'''
+name: filetree
 author: Dag Wieers (@dagwieers) <dag@wieers.com>
 short_description: recursively match all files in a directory tree
 description:
@@ -15,76 +17,103 @@ description:
   This enables merging different trees in order of importance, or add role_vars to specific paths to influence different instances of the same role.
 options:
   _terms:
-    description: path(s) of files to read
-    required: True
+    description: Path(s) of files to read.
+    required: true
+    type: list
+    elements: string
 '''
 
-EXAMPLES = """
+EXAMPLES = r"""
 - name: Create directories
-  file:
+  ansible.builtin.file:
     path: /web/{{ item.path }}
     state: directory
     mode: '{{ item.mode }}'
-  with_filetree: web/
+  with_community.general.filetree: web/
   when: item.state == 'directory'
 
 - name: Template files (explicitly skip directories in order to use the 'src' attribute)
-  template:
+  ansible.builtin.template:
     src: '{{ item.src }}'
-    dest: /web/{{ item.path }}
+    # Your template files should be stored with a .j2 file extension,
+    # but should not be deployed with it. splitext|first removes it.
+    dest: /web/{{ item.path | splitext | first }}
     mode: '{{ item.mode }}'
-  with_filetree: web/
+  with_community.general.filetree: web/
   when: item.state == 'file'
 
 - name: Recreate symlinks
-  file:
+  ansible.builtin.file:
     src: '{{ item.src }}'
     dest: /web/{{ item.path }}
     state: link
-    force: yes
+    follow: false  # avoid corrupting target files if the link already exists
+    force: true
     mode: '{{ item.mode }}'
-  with_filetree: web/
+  with_community.general.filetree: web/
   when: item.state == 'link'
+
+- name: list all files under web/
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.filetree', 'web/') }}"
 """
 
-RETURN = """
+RETURN = r"""
   _raw:
-    description: list of dictionaries with file information
+    description: List of dictionaries with file information.
+    type: list
+    elements: dict
     contains:
         src:
           description:
-          - full path to file
-          - not returned when C(item.state) is set to C(directory)
+          - Full path to file.
+          - Not returned when RV(_raw[].state) is set to V(directory).
+          type: path
         root:
-          description: allows filtering by original location
+          description: Allows filtering by original location.
+          type: path
         path:
-          description: contains the relative path to root
+          description: Contains the relative path to root.
+          type: path
         mode:
-          description: TODO
+          description: The permissions the resulting file or directory.
+          type: str
         state:
           description: TODO
+          type: str
         owner:
-          description: TODO
+          description: Name of the user that owns the file/directory.
+          type: raw
         group:
-          description: TODO
+          description: Name of the group that owns the file/directory.
+          type: raw
         seuser:
-          description: TODO
+          description: The user part of the SELinux file context.
+          type: raw
         serole:
-          description: TODO
+          description: The role part of the SELinux file context.
+          type: raw
         setype:
-          description: TODO
+          description: The type part of the SELinux file context.
+          type: raw
         selevel:
-          description: TODO
+          description: The level part of the SELinux file context.
+          type: raw
         uid:
-          description: TODO
+          description: Owner ID of the file/directory.
+          type: int
         gid:
-          description: TODO
+          description: Group ID of the file/directory.
+          type: int
         size:
-          description: TODO
+          description: Size of the target.
+          type: int
         mtime:
-          description: TODO
+          description: Time of last modification.
+          type: float
         ctime:
-          description: TODO
+          description: Time of last metadata update or creation (depends on OS).
+          type: float
 """
 import os
 import pwd
@@ -99,7 +128,7 @@ except ImportError:
     pass
 
 from ansible.plugins.lookup import LookupBase
-from ansible.module_utils._text import to_native, to_text
+from ansible.module_utils.common.text.converters import to_native, to_text
 from ansible.utils.display import Display
 
 display = Display()
@@ -129,7 +158,7 @@ def file_props(root, path):
     try:
         st = os.lstat(abspath)
     except OSError as e:
-        display.warning('filetree: Error using stat() on path %s (%s)' % (abspath, e))
+        display.warning(f'filetree: Error using stat() on path {abspath} ({e})')
         return None
 
     ret = dict(root=root, path=path)
@@ -143,7 +172,7 @@ def file_props(root, path):
         ret['state'] = 'file'
         ret['src'] = abspath
     else:
-        display.warning('filetree: Error file type of %s is not supported' % abspath)
+        display.warning(f'filetree: Error file type of {abspath} is not supported')
         return None
 
     ret['uid'] = st.st_uid
@@ -156,7 +185,7 @@ def file_props(root, path):
         ret['group'] = to_text(grp.getgrgid(st.st_gid).gr_name)
     except KeyError:
         ret['group'] = st.st_gid
-    ret['mode'] = '0%03o' % (stat.S_IMODE(st.st_mode))
+    ret['mode'] = f'0{stat.S_IMODE(st.st_mode):03o}'
     ret['size'] = st.st_size
     ret['mtime'] = st.st_mtime
     ret['ctime'] = st.st_ctime
@@ -174,6 +203,8 @@ def file_props(root, path):
 class LookupModule(LookupBase):
 
     def run(self, terms, variables=None, **kwargs):
+        self.set_options(var_options=variables, direct=kwargs)
+
         basedir = self.get_basedir(variables)
 
         ret = []
@@ -181,7 +212,7 @@ class LookupModule(LookupBase):
             term_file = os.path.basename(term)
             dwimmed_path = self._loader.path_dwim_relative(basedir, 'files', os.path.dirname(term))
             path = os.path.join(dwimmed_path, term_file)
-            display.debug("Walking '{0}'".format(path))
+            display.debug(f"Walking '{path}'")
             for root, dirs, files in os.walk(path, topdown=True):
                 for entry in dirs + files:
                     relpath = os.path.relpath(os.path.join(root, entry), path)
@@ -190,7 +221,7 @@ class LookupModule(LookupBase):
                     if relpath not in [entry['path'] for entry in ret]:
                         props = file_props(path, relpath)
                         if props is not None:
-                            display.debug("  found '{0}'".format(os.path.join(path, relpath)))
+                            display.debug(f"  found '{os.path.join(path, relpath)}'")
                             ret.append(props)
 
         return ret

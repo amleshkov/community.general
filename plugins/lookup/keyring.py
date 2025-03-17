@@ -1,14 +1,16 @@
-# (c) 2016, Samuel Boucher <boucher.samuel.c@gmail.com>
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, Samuel Boucher <boucher.samuel.c@gmail.com>
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    lookup: keyring
+    name: keyring
     author:
-      - Samuel Boucher <boucher.samuel.c@gmail.com>
+      - Samuel Boucher (!UNKNOWN) <boucher.samuel.c@gmail.com>
     requirements:
       - keyring (python library)
     short_description: grab secrets from the OS keyring
@@ -17,19 +19,23 @@ DOCUMENTATION = '''
 '''
 
 EXAMPLES = """
-- name : output secrets to screen (BAD IDEA)
-  debug:
+- name: output secrets to screen (BAD IDEA)
+  ansible.builtin.debug:
     msg: "Password: {{item}}"
-  with_keyring:
+  with_community.general.keyring:
     - 'servicename username'
 
 - name: access mysql with password from keyring
-  mysql_db: login_password={{lookup('keyring','mysql joe')}} login_user=joe
+  community.mysql.mysql_db:
+    login_password: "{{ lookup('community.general.keyring', 'mysql joe') }}"
+    login_user: joe
 """
 
 RETURN = """
   _raw:
-    description: secrets stored
+    description: Secrets stored.
+    type: list
+    elements: str
 """
 
 HAS_KEYRING = True
@@ -49,17 +55,19 @@ display = Display()
 
 class LookupModule(LookupBase):
 
-    def run(self, terms, **kwargs):
+    def run(self, terms, variables=None, **kwargs):
         if not HAS_KEYRING:
-            raise AnsibleError(u"Can't LOOKUP(keyring): missing required python library 'keyring'")
+            raise AnsibleError("Can't LOOKUP(keyring): missing required python library 'keyring'")
 
-        display.vvvv(u"keyring: %s" % keyring.get_keyring())
+        self.set_options(var_options=variables, direct=kwargs)
+
+        display.vvvv(f"keyring: {keyring.get_keyring()}")
         ret = []
         for term in terms:
             (servicename, username) = (term.split()[0], term.split()[1])
-            display.vvvv(u"username: %s, servicename: %s " % (username, servicename))
+            display.vvvv(f"username: {username}, servicename: {servicename} ")
             password = keyring.get_password(servicename, username)
             if password is None:
-                raise AnsibleError(u"servicename: %s for user %s not found" % (servicename, username))
+                raise AnsibleError(f"servicename: {servicename} for user {username} not found")
             ret.append(password.rstrip())
         return ret

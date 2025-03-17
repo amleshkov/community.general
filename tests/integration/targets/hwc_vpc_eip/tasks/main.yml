@@ -1,4 +1,13 @@
 ---
+####################################################################
+# WARNING: These are designed specifically for Ansible tests       #
+# and should not be used as examples of how to write Ansible roles #
+####################################################################
+
+# Copyright (c) Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Pre-test setup
 - name: create a vpc
   hwc_network_vpc:
@@ -10,7 +19,7 @@
   hwc_vpc_subnet:
     gateway_ip: "192.168.100.32"
     name: "ansible_network_subnet_test"
-    dhcp_enable: True
+    dhcp_enable: true
     vpc_id: "{{ vpc.id }}"
     cidr: "192.168.100.0/26"
     state: present
@@ -40,7 +49,7 @@
       size: 1
     port_id: "{{ port.id }}"
     state: present
-  check_mode: yes
+  check_mode: true
   register: result
 - name: assert changed is true
   assert:
@@ -71,7 +80,7 @@
       size: 1
     port_id: "{{ port.id }}"
     state: present
-  check_mode: yes
+  check_mode: true
   register: result
 - name: idemponent
   assert:
@@ -91,8 +100,8 @@
 - name: assert changed is false
   assert:
     that:
-      - result.failed == 0
-      - result.changed == false
+      - result is not failed
+      - result is not changed
 #----------------------------------------------------------
 - name: delete a eip (check mode)
   hwc_vpc_eip:
@@ -103,7 +112,7 @@
       size: 1
     port_id: "{{ port.id }}"
     state: absent
-  check_mode: yes
+  check_mode: true
   register: result
 - name: assert changed is true
   assert:
@@ -134,7 +143,7 @@
       size: 1
     port_id: "{{ port.id }}"
     state: absent
-  check_mode: yes
+  check_mode: true
   register: result
 - name: idemponent
   assert:
@@ -154,8 +163,8 @@
 - name: assert changed is false
   assert:
     that:
-      - result.failed == 0
-      - result.changed == false
+      - result is not failed
+      - result is not changed
 #---------------------------------------------------------
 # Post-test teardown
 - name: delete a port
@@ -168,7 +177,7 @@
   hwc_vpc_subnet:
     gateway_ip: "192.168.100.32"
     name: "ansible_network_subnet_test"
-    dhcp_enable: True
+    dhcp_enable: true
     vpc_id: "{{ vpc.id }}"
     cidr: "192.168.100.0/26"
     state: absent

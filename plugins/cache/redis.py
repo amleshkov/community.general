@@ -1,51 +1,76 @@
-# (c) 2014, Brian Coca, Josh Drake, et al
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# -*- coding: utf-8 -*-
+# Copyright (c) 2014, Brian Coca, Josh Drake, et al
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
-DOCUMENTATION = '''
-    cache: redis
-    short_description: Use Redis DB for cache
+DOCUMENTATION = r"""
+author: Unknown (!UNKNOWN)
+name: redis
+short_description: Use Redis DB for cache
+description:
+  - This cache uses JSON formatted, per host records saved in Redis.
+requirements:
+  - redis>=2.4.5 (python lib)
+options:
+  _uri:
     description:
-        - This cache uses JSON formatted, per host records saved in Redis.
-    requirements:
-      - redis>=2.4.5 (python lib)
-    options:
-      _uri:
-        description:
-          - A colon separated string of connection information for Redis.
-          - The format is C(host:port:db:password), for example C(localhost:6379:0:changeme).
-          - To use encryption in transit, prefix the connection with C(tls://), as in C(tls://localhost:6379:0:changeme).
-        required: True
-        env:
-          - name: ANSIBLE_CACHE_PLUGIN_CONNECTION
-        ini:
-          - key: fact_caching_connection
-            section: defaults
-      _prefix:
-        description: User defined prefix to use when creating the DB entries
-        default: ansible_facts
-        env:
-          - name: ANSIBLE_CACHE_PLUGIN_PREFIX
-        ini:
-          - key: fact_caching_prefix
-            section: defaults
-      _timeout:
-        default: 86400
-        description: Expiration timeout in seconds for the cache plugin data. Set to 0 to never expire
-        env:
-          - name: ANSIBLE_CACHE_PLUGIN_TIMEOUT
-        ini:
-          - key: fact_caching_timeout
-            section: defaults
-        type: integer
-'''
+      - A colon separated string of connection information for Redis.
+      - The format is V(host:port:db:password), for example V(localhost:6379:0:changeme).
+      - To use encryption in transit, prefix the connection with V(tls://), as in V(tls://localhost:6379:0:changeme).
+      - To use redis sentinel, use separator V(;), for example V(localhost:26379;localhost:26379;0:changeme). Requires redis>=2.9.0.
+    type: string
+    required: true
+    env:
+      - name: ANSIBLE_CACHE_PLUGIN_CONNECTION
+    ini:
+      - key: fact_caching_connection
+        section: defaults
+  _prefix:
+    description: User defined prefix to use when creating the DB entries.
+    type: string
+    default: ansible_facts
+    env:
+      - name: ANSIBLE_CACHE_PLUGIN_PREFIX
+    ini:
+      - key: fact_caching_prefix
+        section: defaults
+  _keyset_name:
+    description: User defined name for cache keyset name.
+    type: string
+    default: ansible_cache_keys
+    env:
+      - name: ANSIBLE_CACHE_REDIS_KEYSET_NAME
+    ini:
+      - key: fact_caching_redis_keyset_name
+        section: defaults
+    version_added: 1.3.0
+  _sentinel_service_name:
+    description: The redis sentinel service name (or referenced as cluster name).
+    type: string
+    env:
+      - name: ANSIBLE_CACHE_REDIS_SENTINEL
+    ini:
+      - key: fact_caching_redis_sentinel
+        section: defaults
+    version_added: 1.3.0
+  _timeout:
+    default: 86400
+    type: integer
+        # TODO: determine whether it is OK to change to: type: float
+    description: Expiration timeout in seconds for the cache plugin data. Set to 0 to never expire.
+    env:
+      - name: ANSIBLE_CACHE_PLUGIN_TIMEOUT
+    ini:
+      - key: fact_caching_timeout
+        section: defaults
+"""
 
+import re
 import time
 import json
 
-from ansible import constants as C
 from ansible.errors import AnsibleError
 from ansible.parsing.ajson import AnsibleJSONEncoder, AnsibleJSONDecoder
 from ansible.plugins.cache import BaseCacheModule
@@ -53,8 +78,9 @@ from ansible.utils.display import Display
 
 try:
     from redis import StrictRedis, VERSION
+    HAS_REDIS = True
 except ImportError:
-    raise AnsibleError("The 'redis' python module (version 2.4.5 or newer) is required for the redis fact cache, 'pip install redis'")
+    HAS_REDIS = False
 
 display = Display()
 
@@ -68,34 +94,80 @@ class CacheModule(BaseCacheModule):
     to expire keys. This mechanism is used or a pattern matched 'scan' for
     performance.
     """
+    _sentinel_service_name = None
+    re_url_conn = re.compile(r'^([^:]+|\[[^]]+\]):(\d+):(\d+)(?::(.*))?$')
+    re_sent_conn = re.compile(r'^(.*):(\d+)$')
+
     def __init__(self, *args, **kwargs):
         uri = ''
 
-        try:
-            super(CacheModule, self).__init__(*args, **kwargs)
-            if self.get_option('_uri'):
-                uri = self.get_option('_uri')
-            self._timeout = float(self.get_option('_timeout'))
-            self._prefix = self.get_option('_prefix')
-        except KeyError:
-            display.deprecated('Rather than importing CacheModules directly, '
-                               'use ansible.plugins.loader.cache_loader',
-                               version='2.0.0', collection_name='community.general')  # was Ansible 2.12
-            if C.CACHE_PLUGIN_CONNECTION:
-                uri = C.CACHE_PLUGIN_CONNECTION
-            self._timeout = float(C.CACHE_PLUGIN_TIMEOUT)
-            self._prefix = C.CACHE_PLUGIN_PREFIX
+        super(CacheModule, self).__init__(*args, **kwargs)
+        if self.get_option('_uri'):
+            uri = self.get_option('_uri')
+        self._timeout = float(self.get_option('_timeout'))
+        self._prefix = self.get_option('_prefix')
+        self._keys_set = self.get_option('_keyset_name')
+        self._sentinel_service_name = self.get_option('_sentinel_service_name')
+
+        if not HAS_REDIS:
+            raise AnsibleError("The 'redis' python module (version 2.4.5 or newer) is required for the redis fact cache, 'pip install redis'")
 
         self._cache = {}
         kw = {}
+
+        # tls connection
         tlsprefix = 'tls://'
         if uri.startswith(tlsprefix):
             kw['ssl'] = True
             uri = uri[len(tlsprefix):]
 
-        connection = uri.split(':')
-        self._db = StrictRedis(*connection, **kw)
-        self._keys_set = 'ansible_cache_keys'
+        # redis sentinel connection
+        if self._sentinel_service_name:
+            self._db = self._get_sentinel_connection(uri, kw)
+        # normal connection
+        else:
+            connection = self._parse_connection(self.re_url_conn, uri)
+            self._db = StrictRedis(*connection, **kw)
+
+        display.vv(f'Redis connection: {self._db}')
+
+    @staticmethod
+    def _parse_connection(re_patt, uri):
+        match = re_patt.match(uri)
+        if not match:
+            raise AnsibleError("Unable to parse connection string")
+        return match.groups()
+
+    def _get_sentinel_connection(self, uri, kw):
+        """
+        get sentinel connection details from _uri
+        """
+        try:
+            from redis.sentinel import Sentinel
+        except ImportError:
+            raise AnsibleError("The 'redis' python module (version 2.9.0 or newer) is required to use redis sentinel.")
+
+        if ';' not in uri:
+            raise AnsibleError('_uri does not have sentinel syntax.')
+
+        # format: "localhost:26379;localhost2:26379;0:changeme"
+        connections = uri.split(';')
+        connection_args = connections.pop(-1)
+        if len(connection_args) > 0:  # handle if no db nr is given
+            connection_args = connection_args.split(':')
+            kw['db'] = connection_args.pop(0)
+            try:
+                kw['password'] = connection_args.pop(0)
+            except IndexError:
+                pass  # password is optional
+
+        sentinels = [self._parse_connection(self.re_sent_conn, shost) for shost in connections]
+        display.vv(f'\nUsing redis sentinels: {sentinels}')
+        scon = Sentinel(sentinels, **kw)
+        try:
+            return scon.master_for(self._sentinel_service_name, socket_timeout=0.2)
+        except Exception as exc:
+            raise AnsibleError(f'Could not connect to redis sentinel: {exc}')
 
     def _make_key(self, key):
         return self._prefix + key
@@ -148,14 +220,12 @@ class CacheModule(BaseCacheModule):
         self._db.zrem(self._keys_set, key)
 
     def flush(self):
-        for key in self.keys():
+        for key in list(self.keys()):
             self.delete(key)
 
     def copy(self):
         # TODO: there is probably a better way to do this in redis
-        ret = dict()
-        for key in self.keys():
-            ret[key] = self.get(key)
+        ret = {k: self.get(k) for k in self.keys()}
         return ret
 
     def __getstate__(self):

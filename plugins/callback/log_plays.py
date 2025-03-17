@@ -1,36 +1,39 @@
-# (C) 2012, Michael DeHaan, <michael.dehaan@gmail.com>
-# (c) 2017 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2012, Michael DeHaan, <michael.dehaan@gmail.com>
+# Copyright (c) 2017 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+from __future__ import annotations
 
-DOCUMENTATION = '''
-    callback: log_plays
-    type: notification
-    short_description: write playbook output to log file
-    description:
-      - This callback writes playbook output to a file per host in the `/var/log/ansible/hosts` directory
-    requirements:
-     - Whitelist in configuration
-     - A writeable /var/log/ansible/hosts directory by the user executing Ansible on the controller
-    options:
-      log_folder:
-        default: /var/log/ansible/hosts
-        description: The folder where log files will be created.
-        env:
-          - name: ANSIBLE_LOG_FOLDER
-        ini:
-          - section: callback_log_plays
-            key: log_folder
-'''
+DOCUMENTATION = r"""
+author: Unknown (!UNKNOWN)
+name: log_plays
+type: notification
+short_description: write playbook output to log file
+description:
+  - This callback writes playbook output to a file per host in the C(/var/log/ansible/hosts) directory.
+requirements:
+  - Whitelist in configuration
+  - A writeable C(/var/log/ansible/hosts) directory by the user executing Ansible on the controller
+options:
+  log_folder:
+    default: /var/log/ansible/hosts
+    description: The folder where log files will be created.
+    type: str
+    env:
+      - name: ANSIBLE_LOG_FOLDER
+    ini:
+      - section: callback_log_plays
+        key: log_folder
+"""
 
 import os
 import time
 import json
 
 from ansible.utils.path import makedirs_safe
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible.module_utils.common._collections_compat import MutableMapping
 from ansible.parsing.ajson import AnsibleJSONEncoder
 from ansible.plugins.callback import CallbackBase
@@ -53,7 +56,10 @@ class CallbackModule(CallbackBase):
     CALLBACK_NEEDS_WHITELIST = True
 
     TIME_FORMAT = "%b %d %Y %H:%M:%S"
-    MSG_FORMAT = "%(now)s - %(category)s - %(data)s\n\n"
+
+    @staticmethod
+    def _make_msg(now, playbook, task_name, task_action, category, data):
+        return f"{now} - {playbook} - {task_name} - {task_action} - {category} - {data}\n\n"
 
     def __init__(self):
 
@@ -67,7 +73,8 @@ class CallbackModule(CallbackBase):
         if not os.path.exists(self.log_folder):
             makedirs_safe(self.log_folder)
 
-    def log(self, host, category, data):
+    def log(self, result, category):
+        data = result._result
         if isinstance(data, MutableMapping):
             if '_ansible_verbose_override' in data:
                 # avoid logging extraneous data
@@ -77,32 +84,35 @@ class CallbackModule(CallbackBase):
                 invocation = data.pop('invocation', None)
                 data = json.dumps(data, cls=AnsibleJSONEncoder)
                 if invocation is not None:
-                    data = json.dumps(invocation) + " => %s " % data
+                    data = f"{json.dumps(invocation)} => {data} "
 
-        path = os.path.join(self.log_folder, host)
+        path = os.path.join(self.log_folder, result._host.get_name())
         now = time.strftime(self.TIME_FORMAT, time.localtime())
 
-        msg = to_bytes(self.MSG_FORMAT % dict(now=now, category=category, data=data))
+        msg = to_bytes(self._make_msg(now, self.playbook, result._task.name, result._task.action, category, data))
         with open(path, "ab") as fd:
             fd.write(msg)
 
-    def runner_on_failed(self, host, res, ignore_errors=False):
-        self.log(host, 'FAILED', res)
+    def v2_runner_on_failed(self, result, ignore_errors=False):
+        self.log(result, 'FAILED')
 
-    def runner_on_ok(self, host, res):
-        self.log(host, 'OK', res)
+    def v2_runner_on_ok(self, result):
+        self.log(result, 'OK')
 
-    def runner_on_skipped(self, host, item=None):
-        self.log(host, 'SKIPPED', '...')
+    def v2_runner_on_skipped(self, result):
+        self.log(result, 'SKIPPED')
 
-    def runner_on_unreachable(self, host, res):
-        self.log(host, 'UNREACHABLE', res)
+    def v2_runner_on_unreachable(self, result):
+        self.log(result, 'UNREACHABLE')
 
-    def runner_on_async_failed(self, host, res, jid):
-        self.log(host, 'ASYNC_FAILED', res)
+    def v2_runner_on_async_failed(self, result):
+        self.log(result, 'ASYNC_FAILED')
 
-    def playbook_on_import_for_host(self, host, imported_file):
-        self.log(host, 'IMPORTED', imported_file)
+    def v2_playbook_on_start(self, playbook):
+        self.playbook = playbook._file_name
 
-    def playbook_on_not_import_for_host(self, host, missing_file):
-        self.log(host, 'NOTIMPORTED', missing_file)
+    def v2_playbook_on_import_for_host(self, result, imported_file):
+        self.log(result, 'IMPORTED', imported_file)
+
+    def v2_playbook_on_not_import_for_host(self, result, missing_file):
+        self.log(result, 'NOTIMPORTED', missing_file)

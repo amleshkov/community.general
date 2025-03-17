@@ -1,59 +1,69 @@
-# (c) 2017-2018, Jan-Piet Mens <jpmens(at)gmail.com>
-# (c) 2018 Ansible Project
-# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+# -*- coding: utf-8 -*-
+# Copyright (c) 2017-2018, Jan-Piet Mens <jpmens(at)gmail.com>
+# Copyright (c) 2018 Ansible Project
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    lookup: lmdb_kv
+    name: lmdb_kv
     author:
       - Jan-Piet Mens (@jpmens)
     version_added: '0.2.0'
     short_description: fetch data from LMDB
     description:
-      - This lookup returns a list of results from an LMDB DB corresponding to a list of items given to it
+      - This lookup returns a list of results from an LMDB DB corresponding to a list of items given to it.
     requirements:
-      - lmdb (python library https://lmdb.readthedocs.io/en/release/)
+      - lmdb (Python library U(https://lmdb.readthedocs.io/en/release/))
     options:
       _terms:
-        description: list of keys to query
+        description: List of keys to query.
+        type: list
+        elements: str
       db:
-        description: path to LMDB database
+        description: Path to LMDB database.
+        type: str
         default: 'ansible.mdb'
+        vars:
+          - name: lmdb_kv_db
 '''
 
 EXAMPLES = """
 - name: query LMDB for a list of country codes
-  debug:
-    msg: "{{ query('lmdb_kv', 'nl', 'be', 'lu', db='jp.mdb') }}"
+  ansible.builtin.debug:
+    msg: "{{ query('community.general.lmdb_kv', 'nl', 'be', 'lu', db='jp.mdb') }}"
 
 - name: use list of values in a loop by key wildcard
-  debug:
+  ansible.builtin.debug:
     msg: "Hello from {{ item.0 }} a.k.a. {{ item.1 }}"
   vars:
     - lmdb_kv_db: jp.mdb
-  with_lmdb_kv:
+  with_community.general.lmdb_kv:
      - "n*"
 
 - name: get an item by key
-  assert:
+  ansible.builtin.assert:
     that:
       - item == 'Belgium'
     vars:
       - lmdb_kv_db: jp.mdb
-    with_lmdb_kv:
-      - be
+  with_community.general.lmdb_kv:
+    - be
 """
 
 RETURN = """
 _raw:
   description: value(s) stored in LMDB
+  type: list
+  elements: raw
 """
 
 
 from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
-from ansible.module_utils._text import to_native, to_text
+from ansible.module_utils.common.text.converters import to_native, to_text
+
 HAVE_LMDB = True
 try:
     import lmdb
@@ -63,8 +73,7 @@ except ImportError:
 
 class LookupModule(LookupBase):
 
-    def run(self, terms, variables, **kwargs):
-
+    def run(self, terms, variables=None, **kwargs):
         '''
         terms contain any number of keys to be retrieved.
         If terms is None, all keys from the database are returned
@@ -77,19 +86,17 @@ class LookupModule(LookupBase):
               vars:
                 - lmdb_kv_db: "jp.mdb"
         '''
-
         if HAVE_LMDB is False:
             raise AnsibleError("Can't LOOKUP(lmdb_kv): this module requires lmdb to be installed")
 
-        db = variables.get('lmdb_kv_db', None)
-        if db is None:
-            db = kwargs.get('db', 'ansible.mdb')
-        db = str(db)
+        self.set_options(var_options=variables, direct=kwargs)
+
+        db = self.get_option('db')
 
         try:
-            env = lmdb.open(db, readonly=True)
+            env = lmdb.open(str(db), readonly=True)
         except Exception as e:
-            raise AnsibleError("LMDB can't open database %s: %s" % (db, to_native(e)))
+            raise AnsibleError(f"LMDB cannot open database {db}: {e}")
 
         ret = []
         if len(terms) == 0:

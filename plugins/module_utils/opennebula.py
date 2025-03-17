@@ -1,6 +1,12 @@
+# -*- coding: utf-8 -*-
 #
 # Copyright 2018 www.privaz.io Valletech AB
-# Simplified BSD License (see licenses/simplified_bsd.txt or https://opensource.org/licenses/BSD-2-Clause)
+#
+# Simplified BSD License (see LICENSES/BSD-2-Clause.txt or https://opensource.org/licenses/BSD-2-Clause)
+# SPDX-License-Identifier: BSD-2-Clause
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 
 import time
@@ -10,6 +16,7 @@ from ansible.module_utils.six import string_types
 from ansible.module_utils.basic import AnsibleModule
 
 
+IMAGE_STATES = ['INIT', 'READY', 'USED', 'DISABLED', 'LOCKED', 'ERROR', 'CLONE', 'DELETE', 'USED_PERS', 'LOCKED_USED', 'LOCKED_USED_PERS']
 HAS_PYONE = True
 
 try:
@@ -18,6 +25,41 @@ try:
 except ImportError:
     OneException = Exception
     HAS_PYONE = False
+
+
+# A helper function to mitigate https://github.com/OpenNebula/one/issues/6064.
+# It allows for easily handling lists like "NIC" or "DISK" in the JSON-like template representation.
+# There are either lists of dictionaries (length > 1) or just dictionaries.
+def flatten(to_flatten, extract=False):
+    """Flattens nested lists (with optional value extraction)."""
+    def recurse(to_flatten):
+        return sum(map(recurse, to_flatten), []) if isinstance(to_flatten, list) else [to_flatten]
+    value = recurse(to_flatten)
+    if extract and len(value) == 1:
+        return value[0]
+    return value
+
+
+# A helper function to mitigate https://github.com/OpenNebula/one/issues/6064.
+# It renders JSON-like template representation into OpenNebula's template syntax (string).
+def render(to_render):
+    """Converts dictionary to OpenNebula template."""
+    def recurse(to_render):
+        for key, value in sorted(to_render.items()):
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                yield '{0:}=[{1:}]'.format(key, ','.join(recurse(value)))
+                continue
+            if isinstance(value, list):
+                for item in value:
+                    yield '{0:}=[{1:}]'.format(key, ','.join(recurse(item)))
+                continue
+            if isinstance(value, str):
+                yield '{0:}="{1:}"'.format(key, value.replace('\\', '\\\\').replace('"', '\\"'))
+                continue
+            yield '{0:}="{1:}"'.format(key, value)
+    return '\n'.join(recurse(to_render))
 
 
 class OpenNebulaModule:
@@ -35,14 +77,16 @@ class OpenNebulaModule:
         wait_timeout=dict(type='int', default=300),
     )
 
-    def __init__(self, argument_spec, supports_check_mode=False, mutually_exclusive=None):
+    def __init__(self, argument_spec, supports_check_mode=False, mutually_exclusive=None, required_one_of=None, required_if=None):
 
-        module_args = OpenNebulaModule.common_args
+        module_args = OpenNebulaModule.common_args.copy()
         module_args.update(argument_spec)
 
         self.module = AnsibleModule(argument_spec=module_args,
                                     supports_check_mode=supports_check_mode,
-                                    mutually_exclusive=mutually_exclusive)
+                                    mutually_exclusive=mutually_exclusive,
+                                    required_one_of=required_one_of,
+                                    required_if=required_if)
         self.result = dict(changed=False,
                            original_message='',
                            message='')
@@ -76,12 +120,12 @@ class OpenNebulaModule:
         if self.module.params.get("api_username"):
             username = self.module.params.get("api_username")
         else:
-            self.fail("Either api_username or the environment vairable ONE_USERNAME must be provided")
+            self.fail("Either api_username or the environment variable ONE_USERNAME must be provided")
 
         if self.module.params.get("api_password"):
             password = self.module.params.get("api_password")
         else:
-            self.fail("Either api_password or the environment vairable ONE_PASSWORD must be provided")
+            self.fail("Either api_password or the environment variable ONE_PASSWORD must be provided")
 
         session = "%s:%s" % (username, password)
 
@@ -304,3 +348,90 @@ class OpenNebulaModule:
             result: the Ansible result
         """
         raise NotImplementedError("Method requires implementation")
+
+    def get_image_list_id(self, image, element):
+        """
+        This is a helper function for get_image_info to iterate over a simple list of objects
+        """
+        list_of_id = []
+
+        if element == 'VMS':
+            image_list = image.VMS
+        if element == 'CLONES':
+            image_list = image.CLONES
+        if element == 'APP_CLONES':
+            image_list = image.APP_CLONES
+
+        for iter in image_list.ID:
+            list_of_id.append(
+                # These are optional so firstly check for presence
+                getattr(iter, 'ID', 'Null'),
+            )
+        return list_of_id
+
+    def get_image_snapshots_list(self, image):
+        """
+        This is a helper function for get_image_info to iterate over a dictionary
+        """
+        list_of_snapshots = []
+
+        for iter in image.SNAPSHOTS.SNAPSHOT:
+            list_of_snapshots.append({
+                'date': iter['DATE'],
+                'parent': iter['PARENT'],
+                'size': iter['SIZE'],
+                # These are optional so firstly check for presence
+                'allow_orhans': getattr(image.SNAPSHOTS, 'ALLOW_ORPHANS', 'Null'),
+                'children': getattr(iter, 'CHILDREN', 'Null'),
+                'active': getattr(iter, 'ACTIVE', 'Null'),
+                'name': getattr(iter, 'NAME', 'Null'),
+            })
+        return list_of_snapshots
+
+    def get_image_info(self, image):
+        """
+        This method is used by one_image and one_image_info modules to retrieve
+        information from XSD scheme of an image
+        Returns: a copy of the parameters that includes the resolved parameters.
+        """
+        info = {
+            'id': image.ID,
+            'name': image.NAME,
+            'state': IMAGE_STATES[image.STATE],
+            'running_vms': image.RUNNING_VMS,
+            'used': bool(image.RUNNING_VMS),
+            'user_name': image.UNAME,
+            'user_id': image.UID,
+            'group_name': image.GNAME,
+            'group_id': image.GID,
+            'permissions': {
+                'owner_u': image.PERMISSIONS.OWNER_U,
+                'owner_m': image.PERMISSIONS.OWNER_M,
+                'owner_a': image.PERMISSIONS.OWNER_A,
+                'group_u': image.PERMISSIONS.GROUP_U,
+                'group_m': image.PERMISSIONS.GROUP_M,
+                'group_a': image.PERMISSIONS.GROUP_A,
+                'other_u': image.PERMISSIONS.OTHER_U,
+                'other_m': image.PERMISSIONS.OTHER_M,
+                'other_a': image.PERMISSIONS.OTHER_A
+            },
+            'type': image.TYPE,
+            'disk_type': image.DISK_TYPE,
+            'persistent': image.PERSISTENT,
+            'regtime': image.REGTIME,
+            'source': image.SOURCE,
+            'path': image.PATH,
+            'fstype': getattr(image, 'FSTYPE', 'Null'),
+            'size': image.SIZE,
+            'cloning_ops': image.CLONING_OPS,
+            'cloning_id': image.CLONING_ID,
+            'target_snapshot': image.TARGET_SNAPSHOT,
+            'datastore_id': image.DATASTORE_ID,
+            'datastore': image.DATASTORE,
+            'vms': self.get_image_list_id(image, 'VMS'),
+            'clones': self.get_image_list_id(image, 'CLONES'),
+            'app_clones': self.get_image_list_id(image, 'APP_CLONES'),
+            'snapshots': self.get_image_snapshots_list(image),
+            'template': image.TEMPLATE,
+        }
+        return info

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # This code is part of Ansible, but is an independent component.
 # This particular file snippet, and this file snippet only, is BSD licensed.
 # Modules you write using this snippet, which is embedded dynamically by Ansible
@@ -5,33 +6,18 @@
 # to the complete work.
 #
 # Copyright (2016-2017) Hewlett Packard Enterprise Development LP
-# All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without modification,
-# are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#    * Redistributions in binary form must reproduce the above copyright notice,
-#      this list of conditions and the following disclaimer in the documentation
-#      and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
-# USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# Simplified BSD License (see LICENSES/BSD-2-Clause.txt or https://opensource.org/licenses/BSD-2-Clause)
+# SPDX-License-Identifier: BSD-2-Clause
 
 from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 import abc
 import collections
 import json
-import os
+# (TODO: remove next line!)
+import os  # noqa: F401, pylint: disable=unused-import
 import traceback
 
 HPE_ONEVIEW_IMP_ERR = None
@@ -44,7 +30,7 @@ except ImportError:
 
 from ansible.module_utils import six
 from ansible.module_utils.basic import AnsibleModule, missing_required_lib
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.common._collections_compat import Mapping
 
 
@@ -218,7 +204,7 @@ class OneViewModuleBase(object):
 
     resource_client = None
 
-    def __init__(self, additional_arg_spec=None, validate_etag_support=False):
+    def __init__(self, additional_arg_spec=None, validate_etag_support=False, supports_check_mode=False):
         """
         OneViewModuleBase constructor.
 
@@ -227,7 +213,7 @@ class OneViewModuleBase(object):
         """
         argument_spec = self._build_argument_spec(additional_arg_spec, validate_etag_support)
 
-        self.module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=False)
+        self.module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=supports_check_mode)
 
         self._check_hpe_oneview_sdk()
         self._create_oneview_client()

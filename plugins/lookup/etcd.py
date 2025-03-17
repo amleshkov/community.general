@@ -1,28 +1,17 @@
-# (c) 2013, Jan-Piet Mens <jpmens(at)gmail.com>
+# -*- coding: utf-8 -*-
+# Copyright (c) 2013, Jan-Piet Mens <jpmens(at)gmail.com>
 # (m) 2016, Mihai Moldovanu <mihaim@tfm.ro>
 # (m) 2017, Juan Manuel Parrilla <jparrill@redhat.com>
-#
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
     author:
         - Jan-Piet Mens (@jpmens)
-    lookup: etcd
+    name: etcd
     short_description: get info from an etcd server
     description:
         - Retrieves data from an etcd server
@@ -32,43 +21,52 @@ DOCUMENTATION = '''
                 - the list of keys to lookup on the etcd server
             type: list
             elements: string
-            required: True
+            required: true
         url:
             description:
-                - Environment variable with the url for the etcd server
+                - Environment variable with the URL for the etcd server
+            type: string
             default: 'http://127.0.0.1:4001'
             env:
               - name: ANSIBLE_ETCD_URL
         version:
             description:
                 - Environment variable with the etcd protocol version
+            type: string
             default: 'v1'
             env:
               - name: ANSIBLE_ETCD_VERSION
         validate_certs:
             description:
                 - toggle checking that the ssl certificates are valid, you normally only want to turn this off with self-signed certs.
-            default: True
+            default: true
             type: boolean
+    seealso:
+    - module: community.general.etcd3
+    - plugin: community.general.etcd3
+      plugin_type: lookup
 '''
 
 EXAMPLES = '''
-    - name: "a value from a locally running etcd"
-      debug: msg={{ lookup('etcd', 'foo/bar') }}
+- name: "a value from a locally running etcd"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.etcd', 'foo/bar') }}"
 
-    - name: "values from multiple folders on a locally running etcd"
-      debug: msg={{ lookup('etcd', 'foo', 'bar', 'baz') }}
+- name: "values from multiple folders on a locally running etcd"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.etcd', 'foo', 'bar', 'baz') }}"
 
-    - name: "since Ansible 2.5 you can set server options inline"
-      debug: msg="{{ lookup('etcd', 'foo', version='v2', url='http://192.168.0.27:4001') }}"
+- name: "you can set server options inline"
+  ansible.builtin.debug:
+    msg: "{{ lookup('community.general.etcd', 'foo', version='v2', url='http://192.168.0.27:4001') }}"
 '''
 
 RETURN = '''
     _raw:
         description:
-            - list of values associated with input keys
+            - List of values associated with input keys.
         type: list
-        elements: strings
+        elements: string
 '''
 
 import json
@@ -82,7 +80,7 @@ from ansible.module_utils.urls import open_url
 # If etcd  v2 running on host 192.168.1.21 on port 2379
 # we can use the following in a playbook to retrieve /tfm/network/config key
 #
-# - debug: msg={{lookup('etcd','/tfm/network/config', url='http://192.168.1.21:2379' , version='v2')}}
+# - ansible.builtin.debug: msg={{lookup('etcd','/tfm/network/config', url='http://192.168.1.21:2379' , version='v2')}}
 #
 # Example Output:
 #
@@ -106,7 +104,7 @@ class Etcd:
     def __init__(self, url, version, validate_certs):
         self.url = url
         self.version = version
-        self.baseurl = '%s/%s/keys' % (self.url, self.version)
+        self.baseurl = f'{self.url}/{self.version}/keys'
         self.validate_certs = validate_certs
 
     def _parse_node(self, node):
@@ -127,7 +125,7 @@ class Etcd:
         return path
 
     def get(self, key):
-        url = "%s/%s?recursive=true" % (self.baseurl, key)
+        url = f"{self.baseurl}/{key}?recursive=true"
         data = None
         value = {}
         try:

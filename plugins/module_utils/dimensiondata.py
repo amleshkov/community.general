@@ -2,39 +2,33 @@
 #
 # Copyright (c) 2016 Dimension Data
 #
-# This module is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This software is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this software.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Authors:
 #   - Aimon Bustardo <aimon.bustardo@dimensiondata.com>
 #   - Mark Maglana   <mmaglana@gmail.com>
 #   - Adam Friedman  <tintoy@tintoy.io>
 #
-# Common functionality to be used by versious module components
+# Common functionality to be used by various module components
+
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 import os
 import re
 import traceback
 
-from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+# (TODO: remove AnsibleModule from next line!)
+from ansible.module_utils.basic import AnsibleModule, missing_required_lib  # noqa: F401, pylint: disable=unused-import
 from ansible.module_utils.six.moves import configparser
 from os.path import expanduser
 from uuid import UUID
 
 LIBCLOUD_IMP_ERR = None
 try:
-    from libcloud.common.dimensiondata import API_ENDPOINTS, DimensionDataAPIException, DimensionDataStatus
-    from libcloud.compute.base import Node, NodeLocation
+    from libcloud.common.dimensiondata import API_ENDPOINTS, DimensionDataAPIException, DimensionDataStatus  # noqa: F401, pylint: disable=unused-import
+    from libcloud.compute.base import Node, NodeLocation  # noqa: F401, pylint: disable=unused-import
     from libcloud.compute.providers import get_driver
     from libcloud.compute.types import Provider
 
@@ -45,7 +39,7 @@ except ImportError:
     LIBCLOUD_IMP_ERR = traceback.format_exc()
     HAS_LIBCLOUD = False
 
-# MCP 2.x version patten for location (datacenter) names.
+# MCP 2.x version pattern for location (datacenter) names.
 #
 # Note that this is not a totally reliable way of determining MCP version.
 # Unfortunately, libcloud's NodeLocation currently makes no provision for extended properties.
